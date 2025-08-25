@@ -40,8 +40,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./schafkopf-frontend
-          file: ./schafkopf-frontend/Dockerfile
+          context: ./frontend
+          file: ./frontend/Dockerfile
           push: true
           # Always push the normal tags; if this is a master push, 
           # prepend "latest" to the list.
