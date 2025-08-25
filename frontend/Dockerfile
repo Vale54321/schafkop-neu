@@ -18,4 +18,4 @@ COPY --from=builder /app/static /usr/share/nginx/html
 # Default nginx port
 EXPOSE 80
 
-ENTRYPOINT ["nginx", "-g", "daemon off;"]
+CMD ["nginx", "-g", "daemon off;"]
