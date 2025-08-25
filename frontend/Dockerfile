@@ -1,5 +1,5 @@
 # Multi-stage build for SvelteKit (static client + node server fallback)
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
 # Install deps (use package-lock if present)
