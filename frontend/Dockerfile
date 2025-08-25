@@ -12,7 +12,7 @@ RUN npm run build
 
 # Use a lightweight nginx to serve the client build output
 FROM nginx:alpine AS runner
-COPY --from=builder /app/.svelte-kit/output/client /usr/share/nginx/html
+COPY --from=builder /app/.svelte-kit/output/server /usr/share/nginx/html
 COPY --from=builder /app/static /usr/share/nginx/html
 
 # Default nginx port
