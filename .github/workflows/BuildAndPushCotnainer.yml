@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - main
 
 env:
   REGISTRY: ghcr.io
@@ -43,7 +43,7 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
-          # Always push the normal tags; if this is a master push, 
+          # Always push the normal tags; if this is a main push, 
           # prepend "latest" to the list.
-          tags: ${{ github.ref == 'refs/heads/master' && format('{0},latest', steps.meta.outputs.tags) || steps.meta.outputs.tags }}
+          tags: ${{ github.ref == 'refs/heads/main' && format('{0},latest', steps.meta.outputs.tags) || steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
