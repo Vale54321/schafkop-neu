@@ -19,22 +19,3 @@ COPY --from=builder /app/static /usr/share/nginx/html
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
-# Use official Node.js image as the base
-FROM node:20-alpine AS build
-
-WORKDIR /app
-
-COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build
-
-# Use nginx to serve the built frontend
-FROM nginx:alpine
-
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY static/ /usr/share/nginx/html
-
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
