@@ -57,6 +57,6 @@ jobs:
       - name: Notify updater (GET, bearer)
         if: ${{ success() && github.ref == 'refs/heads/main' }}
         env:
-          WEBHOOK_TOKEN: ${{ secrets.GITHUB_WEBHOOK_TOKEN }}
+          WEBHOOK_TOKEN: ${{ secrets.WEBHOOK_TOKEN }}
         run: |
           curl -fsS --retry 5 -H "Authorization: Bearer ${WEBHOOK_TOKEN}" http://10.0.3.185:8080/v1/update
