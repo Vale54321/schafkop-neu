@@ -1,5 +1,6 @@
 <script lang="ts">
   // Landing page for the Schafkopf Bot.
+  import Game from './lib/Game.svelte';
 </script>
 
 <main id="app">
@@ -67,6 +68,25 @@
       <li>Play hands while the bot offers optional hints and post-game analysis.</li>
       <li>Export or review hands to track progress.</li>
     </ol>
+  </section>
+
+  <section id="game" class="game container">
+    <h3>Physical robot game</h3>
+    <p class="muted">Boot the robot into an in-person game and let it play as one of the four seats.</p>
+    <div class="grid">
+      <div>
+        <!-- Game starter component -->
+        <Game />
+      </div>
+      <div class="card">
+        <h4>Setup checklist</h4>
+        <ul>
+          <li>Connect robot to the local network.</li>
+          <li>Place the robot at the chosen seat and align card feeder.</li>
+          <li>Calibrate cameras and touch sensors if needed.</li>
+        </ul>
+      </div>
+    </div>
   </section>
 
   <section id="contact" class="contact container">
