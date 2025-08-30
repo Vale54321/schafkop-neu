@@ -139,16 +139,44 @@ export class SerialService implements OnModuleDestroy, OnModuleInit {
     this.close();
   }
 
-  onModuleInit() {
-    const port = process.env.SERIAL_PORT;
-    const baud = process.env.SERIAL_BAUD ? Number(process.env.SERIAL_BAUD) : undefined;
-    if (port) {
+  async onModuleInit() {
+    // Priority: explicit env vars > auto-detect
+    const explicit = process.env.SERIAL_PORT || process.env.PICO_SERIAL_PORT;
+    const baud = Number(process.env.SERIAL_BAUD || process.env.PICO_BAUD || 115200);
+    if (explicit) {
       try {
-        console.log('[SerialService] AUTO opening port from SERIAL_PORT=', port, 'baud=', baud ?? 115200);
-        this.open(port, baud ?? 115200);
+        console.log('[SerialService] AUTO opening explicit port', explicit, 'baud=', baud);
+        this.open(explicit, baud);
+        return;
       } catch (e: any) {
-        console.warn('[SerialService] AUTO open failed', e?.message ?? e);
+        console.warn('[SerialService] explicit open failed', e?.message ?? e);
       }
+    }
+
+    // Attempt auto-detect of Pico (USB first, then common UART paths)
+    try {
+      const ports = await this.listPorts();
+      // Prefer vendorId 2e8a (Pico)
+      let candidate = ports.find(p => (p.vendorId || '').toLowerCase() === '2e8a');
+      if (!candidate) {
+        const common = ['/dev/serial0', '/dev/ttyACM0', '/dev/ttyAMA0'];
+        candidate = ports.find(p => p.path && common.includes(p.path));
+      }
+      // Windows fallback: highest numbered COM port
+      if (!candidate) {
+        const winCom = ports
+          .filter(p => /^COM\d+$/i.test(p.path))
+          .sort((a, b) => Number(b.path.replace(/\D/g, '')) - Number(a.path.replace(/\D/g, '')))[0];
+        if (winCom) candidate = winCom;
+      }
+      if (candidate && candidate.path) {
+        console.log('[SerialService] AUTO opening detected port', candidate.path);
+        this.open(candidate.path, baud);
+      } else {
+        console.log('[SerialService] No serial port auto-detected (will remain idle)');
+      }
+    } catch (e: any) {
+      console.warn('[SerialService] auto-detect failed', e?.message ?? e);
     }
   }
 }

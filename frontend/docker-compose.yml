@@ -1,8 +1,19 @@
 services:
-  frontend:
-    build: .
+  app:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    container_name: schafkop-app
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+      - PORT=3000
+      # Optionally set SERIAL_PORT or PICO_SERIAL_PORT for auto-open
+      # - SERIAL_PORT=/dev/serial0
+      # - SERIAL_BAUD=115200
     ports:
-      - "80:80"
+      - "80:3000"
+    # Uncomment and adjust one of the following for hardware access on a Pi:
+    # devices:
+    #   - /dev/serial0:/dev/serial0
+    #   - /dev/ttyACM0:/dev/ttyACM0

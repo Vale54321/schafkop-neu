@@ -30,3 +30,15 @@ a:hover { opacity: 0.9; }
 @media (prefers-color-scheme: light) {
   :root { --bg: #fafafa; --surface:#fff; --text:#111827; --muted:#556; }
 }
+
+
+/* small helpers that complement tailwind tokens */
+.container { max-width: 1100px; margin: 0 auto; padding: 1.25rem; }
+
+:focus { outline: 3px solid rgba(124,108,255,0.18); outline-offset: 2px; }
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "tailwindcss";
