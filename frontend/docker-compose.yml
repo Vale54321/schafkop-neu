@@ -2,7 +2,7 @@ services:
   app:
     build:
       context: ..
-      dockerfile: frontend/Dockerfile
+      dockerfile: Dockerfile
     container_name: schafkop-app
     restart: unless-stopped
     environment:

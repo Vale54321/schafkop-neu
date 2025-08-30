@@ -1,12 +1,12 @@
+yarn-error.log
 node_modules
 **/node_modules
 npm-debug.log
 yarn-error.log
-dist
 tmp
 temp
 .git
 .gitignore
-Dockerfile*
-frontend/dist
 backend/coverage
+# Keep built frontend out of context cache noise but allow source
+frontend/dist

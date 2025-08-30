@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/backend
+  IMAGE_NAME: ${{ github.repository }}/app
 
 jobs:
   build-and-push:
@@ -47,12 +47,16 @@ jobs:
       - name: Build and push Docker image (multi-arch)
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
+          context: .
+          file: ./Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NODE_VERSION=20-bookworm-slim
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Notify updater (GET, bearer)
         if: ${{ success() && github.ref == 'refs/heads/main' }}
