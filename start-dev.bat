@@ -15,7 +15,7 @@ call :install backend %BACKEND_PM%
 call :install frontend %FRONTEND_PM%
 
 REM Set backend environment variables (edit as needed)
-set "SERIAL_PORT=COM4"
+set "SERIAL_PORT=COM6"
 set "SERIAL_BAUD=115200"
 echo Using SERIAL_PORT=%SERIAL_PORT% SERIAL_BAUD=%SERIAL_BAUD%
 

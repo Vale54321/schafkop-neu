@@ -22,6 +22,23 @@ export class SerialService implements OnModuleDestroy, OnModuleInit {
   private emitter = new EventEmitter();
   private port: any = null;
   private parser: any = null;
+  private verbose = true; // internal debug; does not change emitted payload format
+
+  constructor() {
+    // Wrap emitter.emit to log every emitted event centrally
+    const origEmit = this.emitter.emit.bind(this.emitter);
+    this.emitter.emit = (event: string, ...args: any[]) => {
+      if (this.verbose) {
+        try {
+          const printable = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a));
+          console.log('[SerialService][EVENT]', event, printable.join(' '));
+        } catch {
+          console.log('[SerialService][EVENT]', event, args.length, 'arg(s)');
+        }
+      }
+      return origEmit(event, ...args);
+    };
+  }
 
   async listPorts(): Promise<PortInfo[]> {
   console.log('[SerialService] listPorts()');
@@ -70,9 +87,11 @@ export class SerialService implements OnModuleDestroy, OnModuleInit {
       console.error('[SerialService] port error', err);
       this.emitter.emit('error', err?.message ?? String(err));
     });
+  this.port.on('close', () => { this.emitter.emit('close'); });
     this.parser.on('data', (line: string) => {
-      console.log('[SerialService] RX:', line);
-      this.emitter.emit('data', line);
+      const clean = line.replace(/[\r\n]+$/, '');
+      if (this.verbose) console.log('[SerialService] RX:', clean);
+      this.emitter.emit('data', clean);
     });
 
     // open the port
@@ -131,6 +150,11 @@ export class SerialService implements OnModuleDestroy, OnModuleInit {
   }
 
   on(event: 'data' | 'open' | 'close' | 'error', cb: (...args: any[]) => void) {
+    this.emitter.on(event, cb);
+    return () => this.emitter.off(event, cb);
+  }
+  // Allow subscription to extended events (disconnect, drain, etc.)
+  onAny(event: string, cb: (...args: any[]) => void) {
     this.emitter.on(event, cb);
     return () => this.emitter.off(event, cb);
   }

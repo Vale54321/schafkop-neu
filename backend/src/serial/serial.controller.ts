@@ -65,10 +65,10 @@ export class SerialController {
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
-    const offData = this.serial.on('data', (line) => sendEvent('data', { line }));
-    const offOpen = this.serial.on('open', () => sendEvent('open', { ts: Date.now() }));
-    const offClose = this.serial.on('close', () => sendEvent('close', { ts: Date.now() }));
-    const offErr = this.serial.on('error', (err) => sendEvent('error', { message: String(err) }));
+  const offData = this.serial.on('data', (line) => sendEvent('data', line));
+  const offOpen = this.serial.on('open', () => sendEvent('open', ''));
+  const offClose = this.serial.on('close', () => sendEvent('close', ''));
+  const offErr = this.serial.on('error', (err) => sendEvent('error', String(err)));
 
   console.log('[SerialController] SSE client connected');
 

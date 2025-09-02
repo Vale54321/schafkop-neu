@@ -74,13 +74,20 @@
     // data events contain the actual lines emitted by the Pico; parse JSON payloads but fall back to raw
     es.addEventListener('data', (ev: any) => {
       console.log('[serial][SSE] data event', ev.data);
+      const raw = ev.data as string;
+      let line: string | undefined;
       try {
-        const d = JSON.parse(ev.data);
-        // always show the raw line emitted by the firmware
-        addLog('RX: ' + d.line);
-      } catch (e) {
-        addLog('RX (raw): ' + ev.data);
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && 'line' in parsed) {
+          line = (parsed as any).line;
+        } else if (typeof parsed === 'string') {
+          line = parsed; // backend sent a plain JSON string
+        }
+      } catch {
+        // not JSON -> treat as plain text
       }
+      if (!line) line = raw;
+      addLog('RX: ' + line);
     });
   }
 
