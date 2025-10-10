@@ -1,0 +1,28 @@
+/* Minimal styles for the test frontend */
+:root {
+  color-scheme: light dark;
+  --bg: #0e1217;
+  --fg: #e9eef5;
+  --muted: #94a3b8;
+  --accent: #4f46e5;
+  --card: #111827;
+  --border: #1f2937;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+
+body { background: var(--bg); color: var(--fg); }
+
+.container { max-width: 800px; margin: 3rem auto; padding: 0 1rem; }
+
+h1 { font-size: 1.8rem; margin: 0 0 1rem; }
+.lead { color: var(--muted); margin: 0 0 1rem; }
+.version { color: var(--muted); font-size: 0.9rem; margin: 0 0 1.5rem; }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
+
+button { background: var(--accent); color: white; border: none; padding: 0.6rem 1rem; border-radius: 8px; cursor: pointer; margin-right: 0.5rem; }
+button:hover { filter: brightness(1.1); }
+
+pre { background: #0b0f14; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; overflow: auto; }

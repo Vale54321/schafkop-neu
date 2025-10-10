@@ -1,0 +1,100 @@
+name: Build Firmware
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    env:
+      BRANCH_RAW: ${{ github.ref_name }}
+
+    defaults:
+      run:
+        working-directory: ./pico
+
+    steps:
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO Core
+        run: pip install --upgrade platformio
+
+      - name: Build PlatformIO Project
+        run: pio run
+
+      - name: Compute branch slug & tag
+        id: meta
+        run: |
+          set -euo pipefail
+          slug="$BRANCH_RAW"
+          # Replace anything not [A-Za-z0-9._-] with '-'
+          slug="${slug//[^A-Za-z0-9._-]/-}"
+          # Trim to 60 chars (tags can be long, but keep it tidy)
+          slug="${slug:0:60}"
+          # Avoid trailing dots or dashes
+          slug="${slug%-}"
+          slug="${slug%.}"
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+          echo "tag=nightly-$slug" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure rolling prerelease exists (create if missing)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists — make sure tag points to this commit"
+            git config user.email "actions@github.com"
+            git config user.name "GitHub Actions"
+            git fetch --tags --force
+            git tag -f "$TAG" "$GITHUB_SHA"
+            git push --force origin "refs/tags/$TAG"
+            # Make sure it remains a prerelease
+            gh release edit "$TAG" --prerelease --title "Nightly ($BRANCH_RAW)"
+          else
+            gh release create "$TAG" \
+              --title "Nightly ($BRANCH_RAW)" \
+              --notes "Latest successful build of branch: $BRANCH_RAW" \
+              --prerelease
+          fi
+
+      - name: Attach/overwrite assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+
+          # Optional: write a tiny manifest for fast comparisons on the device
+          mkdir -p .nightly
+          cat > .nightly/manifest.json <<EOF
+          {
+            "branch": "${BRANCH_RAW}",
+            "tag": "${TAG}",
+            "commit": "${GITHUB_SHA}",
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          # Upload and overwrite ( --clobber ) to keep filenames stable
+          gh release upload "$TAG" \
+            .pio/build/pico/firmware.uf2 \
+            .nightly/manifest.json \
+            --clobber

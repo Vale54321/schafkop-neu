@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>{{ title }}</h1>
+    <p class="lead">{{ message }}</p>
+    <p class="version">Version: {{ version }}</p>
+
+    <section class="card">
+      <h2>API Test</h2>
+      <button id="pingBtn">Ping API</button>
+      <button id="versionBtn">Get Version</button>
+      <pre id="result">Waiting…</pre>
+    </section>
+  </main>
+
+  <script src="/static/app.js" type="module"></script>
+</body>
+</html>
