@@ -10,6 +10,6 @@ pub struct Card {
 
 impl fmt::Display for Card {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.rank, self.suit)
+        write!(f, "{} {}", self.suit, self.rank)
     }
 }
