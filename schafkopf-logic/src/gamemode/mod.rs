@@ -21,7 +21,7 @@ impl Gamemode {
     }
 }
 
-fn winner_for_wenz<'a>(rank: Rank, trump_suit: Option<Suit>, cards: [&'a Card; 4]) -> &'a Card  {
+fn winner_for_wenz(rank: Rank, trump_suit: Option<Suit>, cards: [&Card; 4]) -> &Card  {
     let ranks = [rank];
     
     if cards.iter().any(|&c| is_trump(c, &ranks, trump_suit)) {
@@ -46,7 +46,7 @@ fn winner_for_wenz<'a>(rank: Rank, trump_suit: Option<Suit>, cards: [&'a Card; 4
     }
 }
 
-fn winner_for_trump<'a>(trump_suit: Suit, cards: [&'a Card; 4]) -> &'a Card {
+fn winner_for_trump(trump_suit: Suit, cards: [&Card; 4]) -> &Card {
     let ranks = [Rank::Ober, Rank::Unter];
     if cards.iter().any(|&c| is_trump(c, &ranks, Some(trump_suit))) {
         // Highest trump wins
@@ -73,7 +73,7 @@ fn winner_for_trump<'a>(trump_suit: Suit, cards: [&'a Card; 4]) -> &'a Card {
 }
 
 fn is_trump(card: &Card, trump_ranks: &[Rank], trump_suit: Option<Suit>) -> bool {
-    trump_ranks.iter().any(|&r| card.rank == r) || trump_suit.map_or(false, |s| card.suit == s)
+    trump_ranks.contains(&card.rank) || (trump_suit == Some(card.suit))
 }
 
 // Trump strength according to Schafkopf:
@@ -92,7 +92,7 @@ fn trump_strength(card: &Card, trump_suit: Suit) -> u16 {
 fn trump_strength_wenz(card: &Card, rank: Rank, trump_suit: Option<Suit>) -> u16 {
     if card.rank == rank {
         200 + ober_unter_suit_strength(card.suit)
-    } else if trump_suit.map_or(false, |s| card.suit == s) {
+    } else if trump_suit == Some(card.suit) {
         100 + non_trump_strength(card.rank) as u16
     } else {
         0

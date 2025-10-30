@@ -111,13 +111,11 @@ impl InternalPlayer for HumanPlayer {
         let _ = io::stdout().flush();
 
         let mut input = String::new();
-        if io::stdin().read_line(&mut input).is_ok() {
-            if let Ok(idx) = input.trim().parse::<usize>() {
-                if idx < self.hand.len() {
+        if io::stdin().read_line(&mut input).is_ok()
+            && let Ok(idx) = input.trim().parse::<usize>()
+                && idx < self.hand.len() {
                     return Ok(self.hand.remove(idx));
                 }
-            }
-        }
 
         // fallback: pop last
         self.hand.pop().ok_or(PlayerError::NoCards)

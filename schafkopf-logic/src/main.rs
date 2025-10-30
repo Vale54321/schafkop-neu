@@ -1,7 +1,6 @@
 use bevy::{
     asset::{AssetMetaCheck, AssetPlugin, RenderAssetUsages},
     prelude::*,
-    sprite::Anchor,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use schafkopf_logic::{
@@ -10,7 +9,6 @@ use schafkopf_logic::{
     player::{HumanPlayer, InternalPlayer},
 };
 
-use std::fmt::Debug;
 
 
 const CARD_TEXTURE_WIDTH: usize = 96;
@@ -94,7 +92,7 @@ fn setup_game(
 
     let mut deck = Deck::new();
     deck.shuffle();
-    let [mut hand1, mut hand2, mut hand3, mut hand4] =
+    let [mut hand1, hand2, hand3, hand4] =
         deck.deal_4x8().expect("expected a full deck to deal four hands");
 
     sort_cards(&mut hand1);
@@ -131,7 +129,7 @@ fn spawn_player_hand(
         let base_handle = create_card_texture(&mut images, card);
 
         let parent = commands
-            .spawn((Transform::from_xyz(start_x + i as f32 * spacing, y, 0.0)))
+            .spawn(Transform::from_xyz(start_x + i as f32 * spacing, y, 0.0))
             .id();
 
         commands.entity(parent).with_children(|c| {
@@ -146,7 +144,7 @@ fn spawn_player_hand(
             ))
             .observe(on_hover())
             .observe(on_unhover())
-            .observe(on_click(card.clone()));
+            .observe(on_click(*card));
 
             c.spawn((
                 Sprite::from_atlas_image(
