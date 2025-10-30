@@ -1,0 +1,7 @@
+[build]
+dist = "dist"
+release = true
+
+[serve]
+open = false
+port = 8080

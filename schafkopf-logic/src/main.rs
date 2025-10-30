@@ -1,51 +1,335 @@
-mod deck;
-mod gamemode;
+use bevy::{
+    asset::{AssetMetaCheck, AssetPlugin, RenderAssetUsages},
+    prelude::*,
+    sprite::Anchor,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+};
+use schafkopf_logic::{
+    deck::{Card, Deck, Rank, Suit},
+    gamemode::Gamemode,
+    player::{HumanPlayer, InternalPlayer},
+};
 
-use deck::{Deck, Suit, Card, Rank};
-use gamemode::Gamemode;
+use std::fmt::Debug;
+
+
+const CARD_TEXTURE_WIDTH: usize = 96;
+const CARD_TEXTURE_HEIGHT: usize = 135;
+const CARD_WORLD_SIZE: Vec2 = Vec2::new(96.0, 135.0);
+const ICON_OFFSET_TL: Vec2 = Vec2::new(-CARD_WORLD_SIZE.x * 0.5 + 16.0,  CARD_WORLD_SIZE.y * 0.5 - 20.0);
+const ICON_OFFSET_BR: Vec2 = Vec2::new( CARD_WORLD_SIZE.x * 0.5 - 16.0, -CARD_WORLD_SIZE.y * 0.5 + 20.0);
+const GLYPH_WIDTH: usize = 5;
+const GLYPH_HEIGHT: usize = 7;
+const GLYPH_STRIDE: usize = 6;
+const SUIT_ICON_PX: usize = 32;
+const LABEL_MARGIN_X: usize = 14;
+const LABEL_MARGIN_Y: usize = 8;
+const LABEL_TEXT_GAP: usize = 4;
+
+#[derive(Resource)]
+struct CurrentGamemode(Gamemode);
+
+#[derive(Resource)]
+struct SuitAtlas {
+    texture: Handle<Image>,
+    layout:  Handle<TextureAtlasLayout>,
+}
+
+impl SuitAtlas {
+    fn load(
+        asset_server: &AssetServer,
+        layouts: &mut Assets<TextureAtlasLayout>,
+    ) -> Self {
+        let texture: Handle<Image> = asset_server.load("symbole.png");
+        let layout = TextureAtlasLayout::from_grid(UVec2::splat(32), 2, 2, None, None);
+        let layout_handle = layouts.add(layout);
+
+        Self { texture, layout: layout_handle }
+    }
+
+    fn index_for(&self, suit: Suit) -> usize {
+        match suit {
+            Suit::Eichel => 0,
+            Suit::Gras   => 1,
+            Suit::Herz   => 2,
+            Suit::Schell => 3,
+        }
+    }
+}
+
+#[derive(Resource)]
+struct PlayerHandResource {
+    cards: Vec<Card>,
+}
+
+#[derive(Component)]
+struct PlayerCardVisual {
+    card: Card,
+    index: usize,
+}
 
 fn main() {
+    App::new()
+        .add_plugins(
+            DefaultPlugins.set(
+                AssetPlugin {
+                    meta_check: AssetMetaCheck::Never,
+                    ..default()
+                }
+            ).set(ImagePlugin::default_nearest()))
+        .add_systems(Startup, setup_game)
+        .add_systems(PostStartup, spawn_player_hand)
+        .run();
+}
+
+fn setup_game(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut texture_layouts: ResMut<Assets<TextureAtlasLayout>>,
+) {
+    commands.spawn(Camera2d);
+
+    let atlas = SuitAtlas::load(&asset_server, &mut texture_layouts);
+    commands.insert_resource(atlas);
+
     let mut deck = Deck::new();
     deck.shuffle();
+    let [mut hand1, mut hand2, mut hand3, mut hand4] =
+        deck.deal_4x8().expect("expected a full deck to deal four hands");
 
-    let [mut hand1, mut hand2, mut hand3, mut hand4] = deck.deal_4x8().unwrap();
+    sort_cards(&mut hand1);
 
-    println!("Player 1 has:");
-    for card in hand1.iter() {
-        println!("{}", card)
+    let mut p1 = HumanPlayer::new(1, "Alice");
+    let mut p2 = HumanPlayer::new(2, "Bob");
+    let mut p3 = HumanPlayer::new(3, "Clara");
+    let mut p4 = HumanPlayer::new(4, "Max");
+
+    p1.set_hand(hand1);
+    p2.set_hand(hand2);
+    p3.set_hand(hand3);
+    p4.set_hand(hand4);
+
+    let mode = Gamemode::Wenz(None);
+    commands.insert_resource(CurrentGamemode(mode));
+
+    commands.insert_resource(PlayerHandResource {
+        cards: p1.hand().clone(),
+    });
+}
+
+fn spawn_player_hand(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    atlas: Res<SuitAtlas>,
+    hand: Res<PlayerHandResource>,
+) {
+    let spacing = CARD_WORLD_SIZE.x + 5.0;
+    let start_x = -(spacing * (hand.cards.len() as f32 - 1.0) / 2.0);
+    let y = -200.0;
+
+    for (i, card) in hand.cards.iter().enumerate() {
+        let base_handle = create_card_texture(&mut images, card);
+
+        let parent = commands
+            .spawn((Transform::from_xyz(start_x + i as f32 * spacing, y, 0.0)))
+            .id();
+
+        commands.entity(parent).with_children(|c| {
+            c.spawn((
+                Sprite {
+                    image: base_handle,
+                    custom_size: Some(CARD_WORLD_SIZE),
+                    ..default()
+                },
+                Transform::from_xyz(0.0, 0.0, 0.0),
+                Pickable::default(),
+            ))
+            .observe(on_hover())
+            .observe(on_unhover())
+            .observe(on_click(card.clone()));
+
+            c.spawn((
+                Sprite::from_atlas_image(
+                    atlas.texture.clone(),
+                    TextureAtlas {
+                        layout: atlas.layout.clone(),
+                        index: atlas.index_for(card.suit),
+                    },
+                ),
+                Transform::from_xyz(ICON_OFFSET_TL.x, ICON_OFFSET_TL.y, 0.1), // on top
+            ));
+
+            c.spawn((
+                Sprite::from_atlas_image(
+                    atlas.texture.clone(),
+                    TextureAtlas {
+                        layout: atlas.layout.clone(),
+                        index: atlas.index_for(card.suit),
+                    },
+                ),
+                Transform::from_xyz(ICON_OFFSET_BR.x, ICON_OFFSET_BR.y, 0.1),
+            ));
+        });
+    }
+}
+fn sort_cards(cards: &mut Vec<Card>) {
+    cards.sort_by(|a, b| a.suit.cmp(&b.suit).then(a.rank.cmp(&b.rank)));
+}
+
+
+fn create_card_texture(images: &mut Assets<Image>, card: &Card) -> Handle<Image> {
+    let mut pixels = vec![0u8; CARD_TEXTURE_WIDTH * CARD_TEXTURE_HEIGHT * 4];
+
+    let background = suit_background(card.suit);
+    for chunk in pixels.chunks_exact_mut(4) {
+        chunk.copy_from_slice(&background);
     }
 
-    println!("\nPlayer 2 has:");
-    for card in hand2.iter() {
-        println!("{}", card)
+    draw_border(&mut pixels, [45, 45, 45, 255]);
+
+    let rank_text = rank_label(card.rank);
+
+    let ink = [15, 15, 15, 255];
+    let rank_text_len = rank_text.chars().count();
+    let rank_text_width = if rank_text_len == 0 {
+        0
+    } else {
+        (rank_text_len - 1) * GLYPH_STRIDE + GLYPH_WIDTH
+    };
+
+    let top_label_x = LABEL_MARGIN_X;
+    let top_label_y = LABEL_MARGIN_Y + SUIT_ICON_PX + LABEL_TEXT_GAP;
+    let bottom_label_x = CARD_TEXTURE_WIDTH.saturating_sub(LABEL_MARGIN_X + rank_text_width);
+    let bottom_label_y = CARD_TEXTURE_HEIGHT
+        .saturating_sub(LABEL_MARGIN_Y + SUIT_ICON_PX + LABEL_TEXT_GAP + GLYPH_HEIGHT);
+
+    draw_text(&mut pixels, top_label_x, top_label_y, rank_text, ink);
+    draw_text(&mut pixels, bottom_label_x, bottom_label_y, rank_text, ink);
+
+    let extent = Extent3d {
+        width: CARD_TEXTURE_WIDTH as u32,
+        height: CARD_TEXTURE_HEIGHT as u32,
+        depth_or_array_layers: 1,
+    };
+
+    let image = Image::new_fill(
+        extent,
+        TextureDimension::D2,
+        &pixels,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::default(),
+    );
+
+    images.add(image)
+}
+
+fn draw_border(pixels: &mut [u8], color: [u8; 4]) {
+    for x in 0..CARD_TEXTURE_WIDTH {
+        set_pixel(pixels, x, 0, color);
+        set_pixel(pixels, x, CARD_TEXTURE_HEIGHT - 1, color);
     }
 
-    println!("\nPlayer 3 has:");
-    for card in hand3.iter() {
-        println!("{}", card)
+    for y in 0..CARD_TEXTURE_HEIGHT {
+        set_pixel(pixels, 0, y, color);
+        set_pixel(pixels, CARD_TEXTURE_WIDTH - 1, y, color);
     }
+}
 
-    println!("\nPlayer 4 has:");
-    for card in hand4.iter() {
-        println!("{}", card)
+fn draw_text(pixels: &mut [u8], start_x: usize, start_y: usize, text: &str, color: [u8; 4]) {
+    let mut x = start_x;
+    for ch in text.chars() {
+        if let Some(bitmap) = glyph_bitmap(ch) {
+            draw_glyph(pixels, x, start_y, bitmap, color);
+        }
+        x += GLYPH_STRIDE;
     }
+}
 
-    let mode = Gamemode::Solo(Suit::Gras);
-
-    //let trick: [&Card; 4] = [&hand1[0], &hand2[0], &hand3[0], &hand4[0]];
-    let c1 = Card { suit: Suit::Schell, rank: Rank::Zehn };
-    let c2 = Card { suit: Suit::Schell, rank: Rank::Ass };
-    let c3 = Card { suit: Suit::Schell, rank: Rank::Unter };
-    let c4 = Card { suit: Suit::Gras, rank: Rank::Sieben };
-
-    let trick: [&Card; 4] = [&c1, &c2, &c3, &c4];
-
-
-    for card in trick.iter() {
-        println!("{}", card)
+fn draw_glyph(pixels: &mut [u8], start_x: usize, start_y: usize, glyph: [u8; 7], color: [u8; 4]) {
+    for (row, pattern) in glyph.iter().enumerate() {
+        for col in 0..5 {
+            if (pattern >> (4 - col)) & 1 == 1 {
+                set_pixel(pixels, start_x + col, start_y + row, color);
+            }
+        }
     }
-    println!("\n");
+}
 
-    let winner = mode.winning_card(trick);
-    println!("\nWinning card: {}", winner);
+fn set_pixel(pixels: &mut [u8], x: usize, y: usize, color: [u8; 4]) {
+    if x >= CARD_TEXTURE_WIDTH || y >= CARD_TEXTURE_HEIGHT {
+        return;
+    }
+    let index = (y * CARD_TEXTURE_WIDTH + x) * 4;
+    pixels[index..index + 4].copy_from_slice(&color);
+}
+
+fn glyph_bitmap(ch: char) -> Option<[u8; 7]> {
+    match ch {
+        '0' => Some([0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110]),
+        '1' => Some([0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110]),
+        '7' => Some([0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000]),
+        '8' => Some([0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110]),
+        '9' => Some([0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b11100]),
+        'A' => Some([0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001]),
+        'K' => Some([0b10001, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010, 0b10001]),
+        'O' => Some([0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110]),
+        'U' => Some([0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110]),
+        _ => None,
+    }
+}
+
+fn rank_label(rank: Rank) -> &'static str {
+    match rank {
+        Rank::Ass => "A",
+        Rank::Zehn => "10",
+        Rank::Koenig => "K",
+        Rank::Ober => "O",
+        Rank::Unter => "U",
+        Rank::Neun => "9",
+        Rank::Acht => "8",
+        Rank::Sieben => "7",
+    }
+}
+
+fn suit_background(suit: Suit) -> [u8; 4] {
+    match suit {
+        Suit::Eichel => [245, 235, 220, 255],
+        Suit::Gras => [225, 245, 225, 255],
+        Suit::Herz => [245, 225, 225, 255],
+        Suit::Schell => [245, 240, 210, 255],
+    }
+}
+
+fn suit_color(suit: Suit) -> [u8; 4] {
+    match suit {
+        Suit::Eichel => [131, 100, 56, 255],
+        Suit::Gras => [62, 120, 54, 255],
+        Suit::Herz => [170, 40, 60, 255],
+        Suit::Schell => [204, 142, 30, 255],
+    }
+}
+
+fn on_hover() -> impl Fn(On<Pointer<Over>>, Query<(&mut Sprite, &mut Transform)>) {
+    move |ev, mut q| {
+        if let Ok((mut sprite, mut transform)) = q.get_mut(ev.event_target()) {
+            sprite.color = Color::srgb(0.6, 0.6, 0.6);
+            transform.scale = Vec3::splat(1.1);
+        }
+    }
+}
+
+fn on_unhover() -> impl Fn(On<Pointer<Out>>, Query<(&mut Sprite, &mut Transform)>) {
+    move |ev, mut q| {
+        if let Ok((mut sprite, mut transform)) = q.get_mut(ev.event_target()) {
+            sprite.color = Color::WHITE;
+            transform.scale = Vec3::ONE;
+        }
+    }
+}
+
+
+fn on_click(card: Card) -> impl Fn(On<Pointer<Press>>, Query<(&mut Sprite, &mut Transform)>) {
+    move |ev, cards| {
+        println!("Clicked on card: {:?}", card);
+    }
 }
