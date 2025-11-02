@@ -3,6 +3,7 @@ use bevy::{
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
+use bevy::ecs::relationship::Relationship;
 use schafkopf_logic::{
     deck::{Card, Deck, Rank, Suit},
     gamemode::Gamemode,
@@ -73,6 +74,10 @@ struct PlayerCardVisual {
     card: Card,
     index: usize,
 }
+
+// Marker for the base (non-atlas) sprite child under a card parent
+#[derive(Component)]
+struct BaseCardSprite;
 
 fn main() {
     App::new()
@@ -159,6 +164,8 @@ fn spawn_player_hand(
 
         let parent = commands
             .spawn(Transform::from_xyz(start_x + i as f32 * spacing, y, 0.0))
+            .observe(on_hover())
+            .observe(on_unhover())
             .id();
 
         commands.entity(parent).with_children(|c| {
@@ -170,11 +177,9 @@ fn spawn_player_hand(
                 },
                 Transform::from_xyz(0.0, 0.0, 0.0),
                 Pickable::default(),
+                BaseCardSprite,
             ))
-            .observe(on_hover())
-            .observe(on_unhover())
-            .observe(on_click(*card))
-            .observe(on_click_update_label(*card));
+            .observe(on_click_select(*card));
 
             c.spawn((
                 Sprite::from_atlas_image(
@@ -337,33 +342,77 @@ fn suit_color(suit: Suit) -> [u8; 4] {
     }
 }
 
-fn on_hover() -> impl Fn(On<Pointer<Over>>, Query<(&mut Sprite, &mut Transform)>) {
-    move |ev, mut q| {
-        if let Ok((mut sprite, mut transform)) = q.get_mut(ev.event_target()) {
-            sprite.color = Color::srgb(0.6, 0.6, 0.6);
+fn on_hover(
+) -> impl Fn(
+    On<Pointer<Over>>,
+    Query<&mut Transform>,
+    Query<&Children>,
+    Query<(&mut Sprite, Option<&BaseCardSprite>)>,
+    Query<&ChildOf>,
+)
+{
+    move |ev, mut q_transform, q_children, mut q_sprite, q_parent| {
+        // Determine the card parent entity from the event target
+        let mut parent_entity = ev.event_target();
+        if let Ok(parent) = q_parent.get(parent_entity) {
+            parent_entity = parent.get();
+        }
+
+        // Scale the parent
+        if let Ok(mut transform) = q_transform.get_mut(parent_entity) {
             transform.scale = Vec3::splat(1.1);
         }
-    }
-}
 
-fn on_unhover() -> impl Fn(On<Pointer<Out>>, Query<(&mut Sprite, &mut Transform)>) {
-    move |ev, mut q| {
-        if let Ok((mut sprite, mut transform)) = q.get_mut(ev.event_target()) {
-            sprite.color = Color::WHITE;
-            transform.scale = Vec3::ONE;
+        // Tint only the base sprite child (marked with BaseCardSprite)
+        if let Ok(children) = q_children.get(parent_entity) {
+            for child in children.iter() {
+                if let Ok((mut sprite, maybe_base)) = q_sprite.get_mut(child) {
+                    if maybe_base.is_some() {
+                        sprite.color = Color::srgb(0.6, 0.6, 0.6);
+                    }
+                }
+            }
         }
     }
 }
 
+fn on_unhover(
+) -> impl Fn(
+    On<Pointer<Out>>,
+    Query<&mut Transform>,
+    Query<&Children>,
+    Query<(&mut Sprite, Option<&BaseCardSprite>)>,
+    Query<&ChildOf>,
+)
+{
+    move |ev, mut q_transform, q_children, mut q_sprite, q_parent| {
+        // Determine the card parent entity from the event target
+        let mut parent_entity = ev.event_target();
+        if let Ok(parent) = q_parent.get(parent_entity) {
+            parent_entity = parent.get();
+        }
 
-fn on_click(card: Card) -> impl Fn(On<Pointer<Press>>, Query<(&mut Sprite, &mut Transform)>) {
-    move |_, _| {
-        println!("Clicked on card: {:?}", card);
+        // Reset parent scale
+        if let Ok(mut transform) = q_transform.get_mut(parent_entity) {
+            transform.scale = Vec3::ONE;
+        }
+
+        // Reset tint on the base sprite child
+        if let Ok(children) = q_children.get(parent_entity) {
+            for child in children.iter() {
+                if let Ok((mut sprite, maybe_base)) = q_sprite.get_mut(child) {
+                    if maybe_base.is_some() {
+                        sprite.color = Color::WHITE;
+                    }
+                }
+            }
+        }
     }
 }
 
-fn on_click_update_label(card: Card) -> impl Fn(On<Pointer<Press>>, ResMut<ClickedLabel>) {
+fn on_click_select(card: Card) -> impl Fn(On<Pointer<Press>>, ResMut<ClickedLabel>) {
     move |_, mut clicked| {
+        println!("Clicked on card: {:?}", card);
         clicked.0 = Some(format!("{} {}", card.suit, card.rank));
     }
 }
