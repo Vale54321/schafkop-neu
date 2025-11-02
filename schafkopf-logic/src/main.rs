@@ -27,6 +27,14 @@ const LABEL_TEXT_GAP: usize = 4;
 #[derive(Resource)]
 struct CurrentGamemode(Gamemode);
 
+// Resource to hold the currently clicked card label
+#[derive(Resource, Default)]
+struct ClickedLabel(pub Option<String>);
+
+// Marker for the UI text that shows the clicked card name
+#[derive(Component)]
+struct ClickText;
+
 #[derive(Resource)]
 struct SuitAtlas {
     texture: Handle<Image>,
@@ -75,8 +83,9 @@ fn main() {
                     ..default()
                 }
             ).set(ImagePlugin::default_nearest()))
-        .add_systems(Startup, setup_game)
+        .add_systems(Startup, (setup_game, spawn_click_text))
         .add_systems(PostStartup, spawn_player_hand)
+        .add_systems(Update, update_click_text)
         .run();
 }
 
@@ -110,9 +119,29 @@ fn setup_game(
     let mode = Gamemode::Wenz(None);
     commands.insert_resource(CurrentGamemode(mode));
 
+    commands.insert_resource(ClickedLabel::default());
+
     commands.insert_resource(PlayerHandResource {
         cards: p1.hand().clone(),
     });
+}
+
+fn spawn_click_text(mut commands: Commands, _asset_server: Res<AssetServer>) {
+    commands.spawn((
+        Text::new("click a card"),
+        TextFont {
+            font_size: 22.0,
+            ..default()
+        },
+        TextLayout::new_with_justify(Justify::Left),
+        Node {
+            position_type: PositionType::Absolute,
+            top: px(5),
+            left: px(5),
+            ..default()
+        },
+        ClickText,
+    ));
 }
 
 fn spawn_player_hand(
@@ -144,7 +173,8 @@ fn spawn_player_hand(
             ))
             .observe(on_hover())
             .observe(on_unhover())
-            .observe(on_click(*card));
+            .observe(on_click(*card))
+            .observe(on_click_update_label(*card));
 
             c.spawn((
                 Sprite::from_atlas_image(
@@ -327,7 +357,23 @@ fn on_unhover() -> impl Fn(On<Pointer<Out>>, Query<(&mut Sprite, &mut Transform)
 
 
 fn on_click(card: Card) -> impl Fn(On<Pointer<Press>>, Query<(&mut Sprite, &mut Transform)>) {
-    move |ev, cards| {
+    move |_, _| {
         println!("Clicked on card: {:?}", card);
+    }
+}
+
+fn on_click_update_label(card: Card) -> impl Fn(On<Pointer<Press>>, ResMut<ClickedLabel>) {
+    move |_, mut clicked| {
+        clicked.0 = Some(format!("{} {}", card.suit, card.rank));
+    }
+}
+
+fn update_click_text(mut q: Query<&mut Text, With<ClickText>>, clicked: Res<ClickedLabel>) {
+    if let Some(mut text) = q.iter_mut().next() {
+        if let Some(label) = &clicked.0 {
+            *text = Text::new(label.clone());
+        } else {
+            *text = Text::new("click a card");
+        }
     }
 }
