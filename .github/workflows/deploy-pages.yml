@@ -17,19 +17,23 @@ concurrency:
 
 jobs:
   build:
-    name: Build (trunk -> dist)
+    name: Build WebAssembly
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust (stable + wasm32)
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: schafkopf-logic
+          cache-directories: |
+            ~/.cache/trunk
 
       - name: Install trunk
         run: cargo install trunk --locked
