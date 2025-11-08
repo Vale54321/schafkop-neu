@@ -55,7 +55,7 @@ jobs:
             ${{ runner.os }}-trunk-
 
       - name: Install trunk
-        run: cargo install trunk --locked
+        run: cargo install trunk --locked --force
 
       - name: Build with trunk
         working-directory: schafkopf-logic
