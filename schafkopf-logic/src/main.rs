@@ -2,6 +2,7 @@ use bevy::{
     asset::{AssetMetaCheck, AssetPlugin, RenderAssetUsages},
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    window::{WindowPlugin, Window},
 };
 use bevy::ecs::relationship::Relationship;
 use schafkopf_logic::{
@@ -82,12 +83,20 @@ struct BaseCardSprite;
 fn main() {
     App::new()
         .add_plugins(
-            DefaultPlugins.set(
-                AssetPlugin {
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        fit_canvas_to_parent: true,
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(AssetPlugin {
                     meta_check: AssetMetaCheck::Never,
                     ..default()
-                }
-            ).set(ImagePlugin::default_nearest()))
+                })
+                .set(ImagePlugin::default_nearest())
+        )
         .add_systems(Startup, (setup_game, spawn_click_text))
         // Spawn the player hand once the atlas image is fully loaded
         .add_systems(Update, spawn_player_hand)
