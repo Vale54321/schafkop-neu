@@ -43,6 +43,11 @@ struct SuitAtlas {
     layout:  Handle<TextureAtlasLayout>,
 }
 
+#[derive(Resource)]
+struct SauImage {
+    texture: Handle<Image>,
+}
+
 impl SuitAtlas {
     fn load(
         asset_server: &AssetServer,
@@ -80,6 +85,10 @@ struct PlayerHandResource {
 #[derive(Component)]
 struct BaseCardSprite;
 
+// Resource to track if cards have been saved
+#[derive(Resource, Default)]
+struct CardsSaved(bool);
+
 fn main() {
     App::new()
         .add_plugins(
@@ -97,9 +106,10 @@ fn main() {
                 })
                 .set(ImagePlugin::default_nearest())
         )
+        .init_resource::<CardsSaved>()
         .add_systems(Startup, (setup_game, spawn_click_text))
         // Spawn the player hand once the atlas image is fully loaded
-        .add_systems(Update, spawn_player_hand)
+        .add_systems(Update, (spawn_player_hand, save_all_cards))
         .add_systems(Update, update_click_text)
         .run();
 }
@@ -113,6 +123,11 @@ fn setup_game(
 
     let atlas = SuitAtlas::load(&asset_server, &mut texture_layouts);
     commands.insert_resource(atlas);
+
+    let sau_image = SauImage {
+        texture: asset_server.load("schell_sau.png"),
+    };
+    commands.insert_resource(sau_image);
 
     let mut deck = Deck::new();
     deck.shuffle();
@@ -175,10 +190,83 @@ fn spawn_click_text(mut commands: Commands, _asset_server: Res<AssetServer>) {
     ));
 }
 
+fn save_all_cards(
+    mut images: ResMut<Assets<Image>>,
+    atlas: Option<Res<SuitAtlas>>,
+    sau_image: Option<Res<SauImage>>,
+    mut cards_saved: ResMut<CardsSaved>,
+) {
+    use std::fs;
+    
+    // Skip if already saved
+    if cards_saved.0 {
+        return;
+    }
+
+    // Check if atlas resource exists
+    let Some(atlas) = atlas else {
+        return;
+    };
+
+    // Check if sau_image resource exists
+    let Some(sau_image) = sau_image else {
+        return;
+    };
+    
+    // Wait for atlas to load
+    if images.get(&atlas.texture).and_then(|img| img.data.as_ref()).is_none() {
+        return;
+    }
+
+    // Wait for sau image to load
+    if images.get(&sau_image.texture).and_then(|img| img.data.as_ref()).is_none() {
+        return;
+    }
+
+    // Mark as saved to prevent running again
+    cards_saved.0 = true;
+
+    // Create output directory
+    let _ = fs::create_dir_all("generated_cards");
+
+    // Generate all 32 cards
+    let suits = [Suit::Eichel, Suit::Gras, Suit::Herz, Suit::Schell];
+    let ranks = [
+        Rank::Ass, Rank::Zehn, Rank::Koenig, Rank::Ober,
+        Rank::Unter, Rank::Neun, Rank::Acht, Rank::Sieben,
+    ];
+
+    for suit in &suits {
+        for rank in &ranks {
+            let card = Card { suit: *suit, rank: *rank };
+            let image_handle = create_card_texture(&mut images, &atlas, &sau_image, &card);
+            
+            if let Some(image) = images.get(&image_handle) {
+                let filename = format!("generated_cards/{}_{}.png", 
+                    format!("{:?}", suit).to_lowercase(),
+                    format!("{:?}", rank).to_lowercase()
+                );
+                
+                // Save using Bevy's DynamicImage
+                if let Ok(dynamic_image) = image.clone().try_into_dynamic() {
+                    if let Err(e) = dynamic_image.save(&filename) {
+                        eprintln!("Failed to save {}: {}", filename, e);
+                    } else {
+                        println!("Saved {}", filename);
+                    }
+                }
+            }
+        }
+    }
+    
+    println!("All cards saved to generated_cards/ directory");
+}
+
 fn spawn_player_hand(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     atlas: Res<SuitAtlas>,
+    sau_image: Res<SauImage>,
     hand: Res<PlayerHandResource>,
     q_existing: Query<(), With<BaseCardSprite>>, // guard to spawn once
 ) {
@@ -196,7 +284,7 @@ fn spawn_player_hand(
     let y = -200.0;
 
     for (i, card) in hand.cards.iter().enumerate() {
-        let base_handle = create_card_texture(&mut images, &atlas, card);
+        let base_handle = create_card_texture(&mut images, &atlas, &sau_image, card);
 
         let parent = commands
             .spawn(Transform::from_xyz(start_x + i as f32 * spacing, y, 0.0))
@@ -224,7 +312,7 @@ fn sort_cards(cards: &mut Vec<Card>) {
 }
 
 
-fn create_card_texture(images: &mut Assets<Image>, atlas: &SuitAtlas, card: &Card) -> Handle<Image> {
+fn create_card_texture(images: &mut Assets<Image>, atlas: &SuitAtlas, sau_image: &SauImage, card: &Card) -> Handle<Image> {
     let mut pixels = vec![0u8; CARD_TEXTURE_WIDTH * CARD_TEXTURE_HEIGHT * 4];
     let top_h = CARD_TEXTURE_HEIGHT / 2;
     let border_gap = 9;
@@ -261,6 +349,18 @@ fn create_card_texture(images: &mut Assets<Image>, atlas: &SuitAtlas, card: &Car
             atlas_img,
             &pattern,
         );
+    }
+
+    // Blit Sau image at the bottom for Ass cards
+    if card.rank == Rank::Ass && card.suit == Suit::Schell {
+        if let Some(sau_img) = images.get(&sau_image.texture) {
+            let sau_width = 94;
+            let sau_height = 86;
+            // Center horizontally, position at bottom of top half
+            let sau_x = (CARD_TEXTURE_WIDTH - sau_width) / 2;
+            let sau_y = top_h - sau_height;
+            blit_image(&mut pixels, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT, sau_img, sau_x, sau_y);
+        }
     }
 
     // Draw a rounded rectangle border in the TOP half with 9px gap from card edge and 6px radius.
@@ -684,6 +784,46 @@ fn blit_atlas_icon_top_left(
                 if s_index + 4 <= data.len() && d_index + 4 <= dest_pixels.len() {
                     let a = data[s_index + 3];
                     if a == 0 { continue; }
+                    dest_pixels[d_index + 0] = data[s_index + 0];
+                    dest_pixels[d_index + 1] = data[s_index + 1];
+                    dest_pixels[d_index + 2] = data[s_index + 2];
+                    dest_pixels[d_index + 3] = 255; // opaque result
+                }
+            }
+        }
+    }
+}
+
+// Blit a full image onto the card texture at the specified position
+fn blit_image(
+    dest_pixels: &mut [u8],
+    dest_w: usize,
+    dest_h: usize,
+    src_img: &Image,
+    dest_x: usize,
+    dest_y: usize,
+) {
+    if let Some(ref data) = src_img.data {
+        let src_w = src_img.width() as usize;
+        let src_h = src_img.height() as usize;
+
+        for y in 0..src_h {
+            for x in 0..src_w {
+                let dx = dest_x + x;
+                let dy = dest_y + y;
+
+                // Skip if out of bounds
+                if dx >= dest_w || dy >= dest_h {
+                    continue;
+                }
+
+                let s_index = (y * src_w + x) * 4;
+                let d_index = (dy * dest_w + dx) * 4;
+
+                if s_index + 4 <= data.len() && d_index + 4 <= dest_pixels.len() {
+                    let a = data[s_index + 3];
+                    if a == 0 { continue; } // Skip transparent pixels
+                    
                     dest_pixels[d_index + 0] = data[s_index + 0];
                     dest_pixels[d_index + 1] = data[s_index + 1];
                     dest_pixels[d_index + 2] = data[s_index + 2];
